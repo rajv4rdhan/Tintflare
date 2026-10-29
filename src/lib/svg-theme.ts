@@ -6,6 +6,17 @@ export interface SvgThemeOptions {
   cvd?: CvdType;
 }
 
+export interface SvgThemeResult {
+  svg: string;
+  parseMs: number;
+  transformMs: number;
+}
+
+interface ColorOccurrence {
+  hex: string;
+  role: ColorRole;
+}
+
 const TEXT_ELEMENTS = new Set(['text', 'tspan', 'textpath']);
 
 export function getSvgThemeOptions(
@@ -28,29 +39,50 @@ export function getSvgThemeOptions(
 export function applySvgTheme(
   svg: string,
   options: SvgThemeOptions,
-): string {
+): SvgThemeResult {
   const theme = options.dark ? THEMES.dark : THEMES.light;
   const backgroundLuminance = luminanceOf(theme.background);
+  const colors: ColorOccurrence[] = [];
+
+  const parseStart = performance.now();
+  const parsed = svg.replace(/<[^>]*>/g, (tag) =>
+    transformTag(tag, (hex, role) => {
+      const token = `\u0000${colors.length}\u0000`;
+      colors.push({ hex, role });
+      return token;
+    }),
+  );
+  const parseMs = performance.now() - parseStart;
+
+  const transformStart = performance.now();
   const transformed = new Map<string, string>();
 
-  const transform = (hex: string, role: ColorRole): string => {
+  for (const { hex, role } of colors) {
     const cacheKey = `${role}:${hex.toLowerCase()}`;
-    const cached = transformed.get(cacheKey);
-    if (cached) return cached;
 
-    const color = transformColor(hex, {
-      theme,
-      role,
-      dark: options.dark,
-      cvd: options.cvd,
-      backgroundLuminance,
-    });
+    if (!transformed.has(cacheKey)) {
+      transformed.set(
+        cacheKey,
+        transformColor(hex, {
+          theme,
+          role,
+          dark: options.dark,
+          cvd: options.cvd,
+          backgroundLuminance,
+        }),
+      );
+    }
+  }
 
-    transformed.set(cacheKey, color);
-    return color;
-  };
+  const themed = parsed.replace(/\u0000(\d+)\u0000/g, (_, index: string) => {
+    const occurrence = colors[Number(index)];
+    const cacheKey = `${occurrence.role}:${occurrence.hex.toLowerCase()}`;
 
-  return svg.replace(/<[^>]*>/g, (tag) => transformTag(tag, transform));
+    return transformed.get(cacheKey)!;
+  });
+  const transformMs = performance.now() - transformStart;
+
+  return { svg: themed, parseMs, transformMs };
 }
 
 type TransformColor = (hex: string, role: ColorRole) => string;

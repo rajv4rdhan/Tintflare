@@ -6,6 +6,7 @@ import {
   buildTextResponse,
 } from '../lib/http';
 import { resolveObjectKey } from '../lib/paths';
+import type { ServerTiming } from '../lib/server-timing';
 import { applySvgTheme, getSvgThemeOptions } from '../lib/svg-theme';
 import { fetchFile } from '../services/backblaze';
 import { serveNotFound } from './not-found';
@@ -14,10 +15,19 @@ export async function serveAsset(
   request: Request,
   config: AppConfig,
   ctx: ExecutionContext,
+  timing: ServerTiming,
 ): Promise<Response> {
   if (request.method === 'GET') {
     const cached = await matchCached(request);
-    if (cached) return cached;
+
+    if (cached) {
+      timing.add('cache', undefined, 'HIT');
+      return cached;
+    }
+
+    timing.add('cache', undefined, 'MISS');
+  } else {
+    timing.add('cache', undefined, 'BYPASS');
   }
 
   const url = new URL(request.url);
@@ -36,10 +46,16 @@ export async function serveAsset(
     return buildTextResponse('Failed to fetch asset from storage', 502);
   }
 
-  const response =
-    svgTheme && request.method === 'GET'
-      ? buildSvgResponse(applySvgTheme(await upstream.text(), svgTheme), upstream)
-      : buildAssetResponse(upstream);
+  let response: Response;
+
+  if (svgTheme && request.method === 'GET') {
+    const themed = applySvgTheme(await upstream.text(), svgTheme);
+    timing.add('parse', themed.parseMs);
+    timing.add('transform', themed.transformMs);
+    response = buildSvgResponse(themed.svg, upstream);
+  } else {
+    response = buildAssetResponse(upstream);
+  }
 
   if (request.method === 'GET') {
     cacheResponse(ctx, request, response);
