@@ -1,4 +1,4 @@
-import { loadConfig } from './config';
+import { ConfigurationError, loadConfig } from './config';
 import { serveAsset } from './handlers/assets';
 import { buildTextResponse } from './lib/http';
 import { ServerTiming, withServerTiming } from './lib/server-timing';
@@ -26,6 +26,16 @@ export default {
 
       return withServerTiming(response, timing);
     } catch (error) {
+      if (error instanceof ConfigurationError) {
+        console.error('Worker configuration error', error);
+        timing.add('total', performance.now() - started);
+
+        return withServerTiming(
+          buildTextResponse('Worker is not configured correctly', 500),
+          timing,
+        );
+      }
+
       console.error('Request failed', error);
       timing.add('total', performance.now() - started);
 

@@ -69,7 +69,13 @@ Authenticate with Cloudflare once:
 npx wrangler login
 ```
 
-Set the production secrets:
+Deploy:
+
+```bash
+npm run deploy
+```
+
+`npm run deploy` runs the type check and build, uploads `.env` as Worker secrets, then deploys. To upload secrets without deploying, run `npm run secrets`. You can also set them individually:
 
 ```bash
 npx wrangler secret put B2_ACCOUNT_ID
@@ -77,20 +83,18 @@ npx wrangler secret put B2_APPLICATION_KEY
 npx wrangler secret put B2_BUCKET_NAME
 ```
 
-Deploy:
-
-```bash
-npm run deploy
-```
+If the Worker returns `Worker is not configured correctly`, run `npm run secrets` and redeploy; `wrangler tail` logs the missing variable names.
 
 ## Scripts
 
-| Script               | Description                            |
-| -------------------- | -------------------------------------- |
-| `npm run dev`        | Run the Worker locally with Wrangler   |
-| `npm run deploy`     | Deploy the Worker to Cloudflare        |
-| `npm run typecheck`  | Type-check the project with TypeScript |
-| `npm run cf-typegen` | Regenerate `worker-configuration.d.ts` |
+| Script               | Description                                      |
+| -------------------- | ------------------------------------------------ |
+| `npm run dev`        | Run the Worker locally with Wrangler             |
+| `npm run build`      | Bundle the Worker into `dist/` with a dry run    |
+| `npm run secrets`    | Upload `.env` values as Worker secrets           |
+| `npm run deploy`     | Type-check, build, upload secrets, then deploy   |
+| `npm run typecheck`  | Type-check the project with TypeScript           |
+| `npm run cf-typegen` | Regenerate `worker-configuration.d.ts`           |
 
 ## Project layout
 
