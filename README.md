@@ -10,6 +10,7 @@ A Cloudflare Worker that serves static assets from a private Backblaze B2 bucket
 - B2 authorization tokens are cached per Worker isolate for 23 hours.
 - A missing asset serves `404.html` from the bucket, or a built-in fallback page.
 - SVG assets are remapped at the edge: `?tm=dark` for the dark theme and `?cvd=deutan` for a deuteranopia-safe variant.
+- Responses include `Server-Timing` metrics for cache, parse, transform, and total time.
 - Only `GET` and `HEAD` requests are allowed.
 
 ## SVG themes
@@ -25,6 +26,17 @@ SVG assets can be remapped at the edge:
 The pipeline converts each color to OKLCH, flips lightness for dark mode, preserves hue and chroma, gamut-maps back to sRGB, and enforces WCAG contrast for text and strokes. White fills map to the exact theme background.
 
 Theme background colors, contrast thresholds, and CVD matrices live in `src/lib/theme.ts`. Set `THEMES.dark.background` to the blog's exact dark background color.
+
+## Server-Timing
+
+Every response includes a `Server-Timing` header:
+
+```text
+cache;desc=MISS, parse;dur=1.0, transform;dur=4.0, total;dur=8.0
+cache;desc=HIT, total;dur=2.0
+```
+
+Open DevTools → Network → Timing to see the breakdown. `parse` and `transform` only appear for themed SVG responses; `cache` is `HIT`, `MISS`, or `BYPASS`.
 
 ## Local development
 
@@ -95,6 +107,7 @@ src/
     color.ts            OKLCH conversion, gamut mapping, contrast
     http.ts             Response builders
     paths.ts            URL pathname to B2 object key mapping
+    server-timing.ts    Server-Timing collector and response header
     svg-theme.ts        SVG color replacement pipeline
     theme.ts            Theme storage: backgrounds, contrast, CVD matrices
   services/
