@@ -22,6 +22,18 @@ export function buildAssetResponse(upstream: Response): Response {
   return new Response(upstream.body, { status: upstream.status, headers });
 }
 
+export function buildSvgResponse(svg: string, upstream: Response): Response {
+  const headers = new Headers(CORS_HEADERS);
+
+  headers.set('Content-Type', 'image/svg+xml; charset=utf-8');
+  headers.set('Cache-Control', `public, max-age=${ONE_DAY_IN_SECONDS}`);
+
+  const lastModified = upstream.headers.get('Last-Modified');
+  if (lastModified) headers.set('Last-Modified', lastModified);
+
+  return new Response(svg, { status: upstream.status, headers });
+}
+
 export function buildHtmlResponse(
   body: BodyInit | null,
   status: number,
