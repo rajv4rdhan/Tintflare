@@ -9,7 +9,18 @@ A Cloudflare Worker that serves static assets from a private Backblaze B2 bucket
 - Successful asset responses are cached at the edge for 24 hours.
 - B2 authorization tokens are cached per Worker isolate for 23 hours.
 - A missing asset serves `404.html` from the bucket, or a built-in fallback page.
+- SVG assets requested with `?tm=dark` are recolored with the Excalidraw dark palette at the edge.
 - Only `GET` and `HEAD` requests are allowed.
+
+## Dark SVG variants
+
+Append `?tm=dark` to any `.svg` URL to get its Excalidraw dark-palette version:
+
+```text
+/drawings/flow.svg?tm=dark
+```
+
+The Worker replaces the standard Excalidraw colors and caches the dark variant separately from the light version. Colors outside the standard palette are left unchanged.
 
 ## Local development
 
@@ -79,6 +90,7 @@ src/
     cache.ts            Cloudflare Cache API helpers
     http.ts             Response builders
     paths.ts            URL pathname to B2 object key mapping
+    svg-theme.ts        Excalidraw light-to-dark color replacement
   services/
     backblaze.ts        B2 authorization and file downloads
 ```
