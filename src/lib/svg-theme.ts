@@ -1,39 +1,109 @@
-/**
- * Excalidraw light -> dark equivalents, computed with Excalidraw's own
- * `applyDarkModeFilter` (invert 93% + hue-rotate 180deg).
- */
-const DARK_COLORS: Record<string, string> = {
-  '#1e1e1e': '#d3d3d3',
-  '#000000': '#ededed',
-  '#ffffff': '#121212',
-  '#e03131': '#ff8383',
-  '#ffc9c9': '#5a2c2c',
-  '#2f9e44': '#39994b',
-  '#b2f2bb': '#043b0c',
-  '#1971c2': '#56a2e8',
-  '#a5d8ff': '#154162',
-  '#f08c00': '#b86200',
-  '#ffec99': '#362600',
-};
+import { luminanceOf, transformColor } from './color';
+import { THEMES, type ColorRole, type CvdType } from './theme';
 
-export function isDarkSvgRequest(url: URL, key: string): boolean {
-  return url.searchParams.get('tm') === 'dark' && key.toLowerCase().endsWith('.svg');
+export interface SvgThemeOptions {
+  dark: boolean;
+  cvd?: CvdType;
 }
 
-export function applyDarkTheme(svg: string): string {
-  return svg.replace(/#(?:[0-9a-f]{6}|[0-9a-f]{3})\b/gi, (color) => {
-    const normalized = normalizeHex(color);
-    return DARK_COLORS[normalized] ?? color;
-  });
+const TEXT_ELEMENTS = new Set(['text', 'tspan', 'textpath']);
+
+export function getSvgThemeOptions(
+  url: URL,
+  key: string,
+): SvgThemeOptions | undefined {
+  if (!key.toLowerCase().endsWith('.svg')) return undefined;
+
+  const dark = url.searchParams.get('tm') === 'dark';
+  const cvd =
+    url.searchParams.get('cvd')?.toLowerCase() === 'deutan'
+      ? 'deutan'
+      : undefined;
+
+  if (!dark && !cvd) return undefined;
+
+  return { dark, cvd };
 }
 
-function normalizeHex(color: string): string {
-  const hex = color.toLowerCase();
-  const digits = hex.slice(1);
+export function applySvgTheme(
+  svg: string,
+  options: SvgThemeOptions,
+): string {
+  const theme = options.dark ? THEMES.dark : THEMES.light;
+  const backgroundLuminance = luminanceOf(theme.background);
+  const transformed = new Map<string, string>();
 
-  if (digits.length === 3) {
-    return `#${digits[0]}${digits[0]}${digits[1]}${digits[1]}${digits[2]}${digits[2]}`;
+  const transform = (hex: string, role: ColorRole): string => {
+    const cacheKey = `${role}:${hex.toLowerCase()}`;
+    const cached = transformed.get(cacheKey);
+    if (cached) return cached;
+
+    const color = transformColor(hex, {
+      theme,
+      role,
+      dark: options.dark,
+      cvd: options.cvd,
+      backgroundLuminance,
+    });
+
+    transformed.set(cacheKey, color);
+    return color;
+  };
+
+  return svg.replace(/<[^>]*>/g, (tag) => transformTag(tag, transform));
+}
+
+type TransformColor = (hex: string, role: ColorRole) => string;
+
+function transformTag(tag: string, transform: TransformColor): string {
+  const name = /^<\s*([a-zA-Z][\w:-]*)/.exec(tag)?.[1];
+  const isText = name ? TEXT_ELEMENTS.has(name.toLowerCase()) : false;
+
+  let result = tag.replace(
+    /\b(fill|stroke|color|stop-color|flood-color|lighting-color)\s*=\s*(["'])(#[0-9a-f]{3,6})\2/gi,
+    (match, attribute: string, quote: string, hex: string) => {
+      const role = roleForAttribute(attribute, isText);
+
+      return role
+        ? `${attribute}=${quote}${transform(hex, role)}${quote}`
+        : match;
+    },
+  );
+
+  result = result.replace(
+    /\bstyle\s*=\s*(["'])([\s\S]*?)\1/gi,
+    (match, quote: string, style: string) => {
+      const next = style.replace(
+        /\b(fill|stroke|color|stop-color|flood-color|lighting-color)\s*:\s*(#[0-9a-f]{3,6})\b/gi,
+        (declaration: string, property: string, hex: string) => {
+          const role = roleForAttribute(property, isText);
+          return role ? `${property}:${transform(hex, role)}` : declaration;
+        },
+      );
+
+      return next === style ? match : `style=${quote}${next}${quote}`;
+    },
+  );
+
+  return result;
+}
+
+function roleForAttribute(
+  attribute: string,
+  isText: boolean,
+): ColorRole | undefined {
+  switch (attribute.toLowerCase()) {
+    case 'stroke':
+      return 'stroke';
+    case 'color':
+      return 'text';
+    case 'fill':
+      return isText ? 'text' : 'fill';
+    case 'stop-color':
+    case 'flood-color':
+    case 'lighting-color':
+      return 'fill';
+    default:
+      return undefined;
   }
-
-  return hex;
 }

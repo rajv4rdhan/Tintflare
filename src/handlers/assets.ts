@@ -6,7 +6,7 @@ import {
   buildTextResponse,
 } from '../lib/http';
 import { resolveObjectKey } from '../lib/paths';
-import { applyDarkTheme, isDarkSvgRequest } from '../lib/svg-theme';
+import { applySvgTheme, getSvgThemeOptions } from '../lib/svg-theme';
 import { fetchFile } from '../services/backblaze';
 import { serveNotFound } from './not-found';
 
@@ -24,7 +24,7 @@ export async function serveAsset(
   const key = resolveObjectKey(url.pathname);
   if (!key) return buildTextResponse('Bad Request', 400);
 
-  const darkSvg = request.method === 'GET' && isDarkSvgRequest(url, key);
+  const svgTheme = getSvgThemeOptions(url, key);
   const upstream = await fetchFile(config, key);
 
   if (upstream.status === 404) {
@@ -36,9 +36,10 @@ export async function serveAsset(
     return buildTextResponse('Failed to fetch asset from storage', 502);
   }
 
-  const response = darkSvg
-    ? buildSvgResponse(applyDarkTheme(await upstream.text()), upstream)
-    : buildAssetResponse(upstream);
+  const response =
+    svgTheme && request.method === 'GET'
+      ? buildSvgResponse(applySvgTheme(await upstream.text(), svgTheme), upstream)
+      : buildAssetResponse(upstream);
 
   if (request.method === 'GET') {
     cacheResponse(ctx, request, response);
