@@ -13,26 +13,26 @@ export function buildAssetResponse(upstream: Response): Response {
   );
   headers.set('Cache-Control', `public, max-age=${ONE_DAY_IN_SECONDS}`);
 
-  copyHeader(upstream, headers, 'ETag');
-  copyHeader(upstream, headers, 'Last-Modified');
+  const etag = upstream.headers.get('ETag');
+  if (etag) headers.set('ETag', etag);
 
-  return new Response(upstream.body, {
-    status: upstream.status,
-    headers,
-  });
+  const lastModified = upstream.headers.get('Last-Modified');
+  if (lastModified) headers.set('Last-Modified', lastModified);
+
+  return new Response(upstream.body, { status: upstream.status, headers });
 }
 
 export function buildHtmlResponse(
   body: BodyInit | null,
   status: number,
-  maxAgeSeconds: number,
+  maxAge: number,
 ): Response {
   return new Response(body, {
     status,
     headers: {
       ...CORS_HEADERS,
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': `public, max-age=${maxAgeSeconds}`,
+      'Cache-Control': `public, max-age=${maxAge}`,
     },
   });
 }
@@ -51,12 +51,4 @@ export function buildTextResponse(
       ...extraHeaders,
     },
   });
-}
-
-function copyHeader(source: Response, target: Headers, name: string): void {
-  const value = source.headers.get(name);
-
-  if (value) {
-    target.set(name, value);
-  }
 }

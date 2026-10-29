@@ -73,11 +73,10 @@ src/
   config.ts             Environment validation and typed configuration
   env.d.ts              Worker environment variable types
   handlers/
-    assets.ts           Asset request handling and edge caching
+    assets.ts           Asset requests and edge caching
     not-found.ts        Custom and fallback 404 responses
   lib/
     cache.ts            Cloudflare Cache API helpers
-    errors.ts           Application error types
     http.ts             Response builders
     paths.ts            URL pathname to B2 object key mapping
   services/

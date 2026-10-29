@@ -1,11 +1,11 @@
 import type { AppConfig } from '../config';
 import { buildHtmlResponse } from '../lib/http';
-import { downloadFile, type B2Authorization } from '../services/backblaze';
+import { fetchFile } from '../services/backblaze';
 
-const NOT_FOUND_OBJECT_KEY = '404.html';
-const NOT_FOUND_CACHE_SECONDS = 60 * 60;
+const NOT_FOUND_KEY = '404.html';
+const NOT_FOUND_MAX_AGE = 60 * 60;
 
-const FALLBACK_NOT_FOUND_HTML = `<!DOCTYPE html>
+const FALLBACK_404 = `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -22,27 +22,15 @@ const FALLBACK_NOT_FOUND_HTML = `<!DOCTYPE html>
   </body>
 </html>`;
 
-/**
- * Serves the bucket's custom `404.html` when available, otherwise a built-in
- * fallback page.
- */
-export async function serveNotFound(
-  config: AppConfig,
-  authorization: B2Authorization,
-): Promise<Response> {
+export async function serveNotFound(config: AppConfig): Promise<Response> {
   try {
-    const response = await downloadFile(
-      authorization,
-      config.bucketName,
-      NOT_FOUND_OBJECT_KEY,
-    );
-
+    const response = await fetchFile(config, NOT_FOUND_KEY);
     if (response.ok) {
-      return buildHtmlResponse(response.body, 404, NOT_FOUND_CACHE_SECONDS);
+      return buildHtmlResponse(response.body, 404, NOT_FOUND_MAX_AGE);
     }
   } catch (error) {
-    console.error('Failed to fetch custom 404 page', error);
+    console.error('Failed to fetch 404.html', error);
   }
 
-  return buildHtmlResponse(FALLBACK_NOT_FOUND_HTML, 404, 0);
+  return buildHtmlResponse(FALLBACK_404, 404, 0);
 }
