@@ -32,6 +32,13 @@ interface ColorOccurrence {
 
 const TEXT_ELEMENTS = new Set(['text', 'tspan', 'textpath']);
 
+/**
+ * Elements whose children are geometry, not paint. Mask colors encode
+ * opacity by luminance (Excalidraw cuts arrow labels out with white and black
+ * mask rects), so recoloring them would hide or invert the masked content.
+ */
+const NON_PAINT_ELEMENTS = new Set(['mask', 'clippath']);
+
 export function getSvgThemeOptions(
   url: URL,
   key: string,
@@ -87,13 +94,28 @@ export function applySvgTheme(
   const colors: ColorOccurrence[] = [];
 
   const parseStart = performance.now();
-  const parsed = svg.replace(/<[^>]*>/g, (tag) =>
-    transformTag(tag, (hex, role) => {
+  let nonPaintDepth = 0;
+  const parsed = svg.replace(/<[^>]*>/g, (tag) => {
+    const boundary = nonPaintBoundary(tag);
+
+    if (boundary === 'open') {
+      nonPaintDepth += 1;
+      return tag;
+    }
+
+    if (boundary === 'close') {
+      nonPaintDepth = Math.max(0, nonPaintDepth - 1);
+      return tag;
+    }
+
+    if (nonPaintDepth > 0) return tag;
+
+    return transformTag(tag, (hex, role) => {
       const token = `\u0000${colors.length}\u0000`;
       colors.push({ hex, role });
       return token;
-    }),
-  );
+    });
+  });
   const parseMs = performance.now() - parseStart;
 
   const transformStart = performance.now();
@@ -125,6 +147,21 @@ export function applySvgTheme(
   const transformMs = performance.now() - transformStart;
 
   return { svg: themed, parseMs, transformMs };
+}
+
+/**
+ * Reports whether a tag opens or closes a `<mask>` or `<clipPath>`.
+ * Self-closing tags have no children, so they are neither.
+ */
+function nonPaintBoundary(tag: string): 'open' | 'close' | undefined {
+  const match = /^<\s*(\/)?\s*([a-zA-Z][\w:-]*)/.exec(tag);
+  if (!match || !NON_PAINT_ELEMENTS.has(match[2].toLowerCase())) {
+    return undefined;
+  }
+
+  if (match[1]) return 'close';
+
+  return /\/\s*>$/.test(tag) ? undefined : 'open';
 }
 
 type TransformColor = (hex: string, role: ColorRole) => string;
