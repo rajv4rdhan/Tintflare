@@ -2,7 +2,16 @@
   "name": "tintflare",
   "version": "0.0.1",
   "private": true,
-  "description": "A Cloudflare Worker",
+  "description": "A Cloudflare Worker that re-tints SVG diagrams from a private Backblaze B2 bucket to match your site's theme.",
+  "license": "MIT",
+  "author": "Rajvardhan",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rajv4rdhan/Tintflare.git"
+  },
+  "homepage": "https://github.com/rajv4rdhan/Tintflare#readme",
+  "bugs": "https://github.com/rajv4rdhan/Tintflare/issues",
+  "keywords": ["cloudflare-workers", "backblaze-b2", "svg", "dark-mode", "theming", "excalidraw", "oklch"],
   "scripts": {
     "dev": "wrangler dev",
     "build": "wrangler deploy --dry-run --outdir dist",
