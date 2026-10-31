@@ -9,7 +9,7 @@ A Cloudflare Worker that serves static assets from a private Backblaze B2 bucket
 - Successful asset responses are cached at the edge for 24 hours.
 - B2 authorization tokens are cached per Worker isolate for 23 hours.
 - A missing asset serves `404.html` from the bucket, or a built-in fallback page.
-- SVG assets are remapped at the edge: `?tm=light` for the light theme, `?tm=dark` for the dark theme, and `?cvd=deutan` for a deuteranopia-safe variant.
+- SVG assets are remapped at the edge: `?tm=light` / `?tm=dark` for the default theme, `?theme=rvfolio&tm=dark` for a named theme, and `?cvd=deutan` for a deuteranopia-safe variant.
 - Responses include `Server-Timing` metrics for cache, parse, transform, and total time.
 - Only `GET` and `HEAD` requests are allowed.
 
@@ -19,21 +19,26 @@ SVG assets can be remapped at the edge:
 
 | Query | Result |
 | --- | --- |
-| `?tm=light` | Perceptual light variant, using `src/themes/light.ts` |
-| `?tm=dark` | Perceptual dark variant, using `src/themes/dark.ts` |
-| `?cvd=deutan` | Deuteranopia-safe light variant |
-| `?tm=dark&cvd=deutan` | Both |
+| `?tm=light` | Default light theme |
+| `?tm=dark` | Default dark theme |
+| `?theme=rvfolio` | rvfolio light theme |
+| `?theme=rvfolio&tm=light` | rvfolio light theme |
+| `?theme=rvfolio&tm=dark` | rvfolio dark theme |
+| `?cvd=deutan` | Default light theme with deuteranopia-safe colors |
+| `?theme=rvfolio&tm=dark&cvd=deutan` | rvfolio dark theme with deuteranopia-safe colors |
+
+An unknown `theme` or `tm` value returns `400 Bad Request`.
 
 The pipeline converts each color to OKLCH, flips lightness for dark mode, preserves hue and chroma, gamut-maps back to sRGB, and enforces WCAG contrast for text and strokes. White fills map to the exact theme background.
 
 ### Customizing a theme
 
-Each theme has its own file, so light and dark mode can match different site designs independently:
+The default theme is split into separate light and dark files:
 
 | File | Used by |
 | --- | --- |
-| `src/themes/light.ts` | `?tm=light` and the light variant used by `?cvd=deutan` |
-| `src/themes/dark.ts` | `?tm=dark` |
+| `src/themes/light.ts` | Default `?tm=light` and `?cvd=deutan` |
+| `src/themes/dark.ts` | Default `?tm=dark` |
 
 Set `background` to the exact page background your site uses. For example, a cream light theme and a dark-blue theme:
 
@@ -45,7 +50,37 @@ background: '#faf6ee', // cream
 background: '#0b1220', // dark blue
 ```
 
-White SVG fills are replaced with the exact theme background, and text/stroke contrast is calculated against it. Adjust `minContrast` if your site needs stricter or looser WCAG thresholds. The available themes are registered in `src/themes/index.ts`, and CVD matrices live in `src/themes/cvd.ts`.
+### Adding a named theme
+
+Create a theme collection with its own light and dark variants, for example `src/themes/rvfolio.ts`:
+
+```ts
+import type { ThemeCollection } from './types';
+
+export const rvfolioTheme = {
+  light: {
+    background: '#faf6ee',
+    minContrast: { text: 4.5, stroke: 3, fill: 0 },
+  },
+  dark: {
+    background: '#0b1220',
+    minContrast: { text: 4.5, stroke: 3, fill: 0 },
+  },
+} satisfies ThemeCollection;
+```
+
+Register it in `src/themes/index.ts`:
+
+```ts
+export const THEMES = {
+  default: { light: lightTheme, dark: darkTheme },
+  rvfolio: rvfolioTheme,
+} satisfies Record<string, ThemeCollection>;
+```
+
+The registry key becomes the `?theme=` value. Use `?theme=rvfolio&tm=light` or `?theme=rvfolio&tm=dark`; omitting `tm` defaults to light.
+
+White SVG fills are replaced with the exact theme background, and text/stroke contrast is calculated against it. Adjust `minContrast` if your site needs stricter or looser WCAG thresholds. CVD matrices live in `src/themes/cvd.ts`.
 
 ## Server-Timing
 
@@ -134,9 +169,10 @@ src/
     server-timing.ts    Server-Timing collector and response header
     svg-theme.ts        SVG color replacement pipeline
   themes/
-    index.ts            Theme registry
-    light.ts            Light theme: background and contrast
-    dark.ts             Dark theme: background and contrast
+    index.ts            Theme registry and named theme lookup
+    light.ts            Default light theme: background and contrast
+    dark.ts             Default dark theme: background and contrast
+    rvfolio.ts          rvfolio light/dark theme collection
     cvd.ts              Color-vision-deficiency matrices
     types.ts            Shared theme types
   services/
