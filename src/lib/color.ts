@@ -1,5 +1,6 @@
 import {
   CVD_MATRICES,
+  type ColorReplacement,
   type ColorRole,
   type CvdType,
   type ThemeDefinition,
@@ -24,8 +25,9 @@ export interface ColorTransformOptions {
 /**
  * Remaps one sRGB hex color through OKLCH.
  *
- * The pipeline optionally applies a CVD matrix in linear RGB, converts to
- * OKLCH, flips lightness for the dark theme, enforces contrast against the
+ * A theme can replace the color exactly through `overrides` or `colors`.
+ * Otherwise the pipeline applies the CVD matrix (when requested), converts
+ * to OKLCH, flips lightness for the dark theme, enforces contrast against the
  * theme background, and gamut-maps the result back to sRGB.
  */
 export function transformColor(
@@ -34,6 +36,13 @@ export function transformColor(
 ): string {
   const rgb = hexToRgb(hex);
   if (!rgb) return hex;
+
+  const replacement = resolveColorReplacement(hex, options.role, options.theme);
+
+  // `null` means keep the original color; a string is used exactly as written.
+  if (replacement !== undefined) {
+    return replacement ?? hex;
+  }
 
   // A white fill should become the exact page background, not a near-black
   // approximation of it.
@@ -63,6 +72,45 @@ export function transformColor(
 export function luminanceOf(hex: string): number {
   const rgb = hexToRgb(hex);
   return rgb ? relativeLuminance(srgbToLinear(rgb)) : 0;
+}
+
+/**
+ * Resolves an explicit theme replacement.
+ *
+ * Precedence:
+ * 1. `overrides[sourceHex]` for the color's role
+ * 2. `overrides[sourceHex]` as an all-role string
+ * 3. `colors[role]`
+ * 4. `undefined`, which lets automatic recoloring run
+ */
+function resolveColorReplacement(
+  hex: string,
+  role: ColorRole,
+  theme: ThemeDefinition,
+): ColorReplacement | undefined {
+  const normalized = normalizeHex(hex);
+
+  if (theme.overrides && normalized) {
+    for (const [source, replacement] of Object.entries(theme.overrides)) {
+      if (normalizeHex(source) !== normalized) continue;
+
+      if (replacement === null || typeof replacement === 'string') {
+        return replacement;
+      }
+
+      if (Object.hasOwn(replacement, role)) {
+        return replacement[role];
+      }
+
+      break;
+    }
+  }
+
+  if (theme.colors && Object.hasOwn(theme.colors, role)) {
+    return theme.colors[role];
+  }
+
+  return undefined;
 }
 
 function enforceContrast(
@@ -110,7 +158,20 @@ function enforceContrast(
 }
 
 function hexToRgb(hex: string): Rgb | undefined {
-  const value = hex.replace(/^#/, '');
+  const normalized = normalizeHex(hex);
+  if (!normalized) return undefined;
+
+  const value = normalized.slice(1);
+
+  return [
+    Number.parseInt(value.slice(0, 2), 16) / 255,
+    Number.parseInt(value.slice(2, 4), 16) / 255,
+    Number.parseInt(value.slice(4, 6), 16) / 255,
+  ];
+}
+
+function normalizeHex(hex: string): string | undefined {
+  const value = hex.replace(/^#/, '').toLowerCase();
 
   if (!/^(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) {
     return undefined;
@@ -124,11 +185,7 @@ function hexToRgb(hex: string): Rgb | undefined {
           .join('')
       : value;
 
-  return [
-    Number.parseInt(expanded.slice(0, 2), 16) / 255,
-    Number.parseInt(expanded.slice(2, 4), 16) / 255,
-    Number.parseInt(expanded.slice(4, 6), 16) / 255,
-  ];
+  return `#${expanded}`;
 }
 
 function rgbToHex([r, g, b]: Rgb): string {

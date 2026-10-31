@@ -5,6 +5,8 @@ import type { ThemeCollection } from './types';
 
 export { CVD_MATRICES } from './cvd';
 export type {
+  ColorOverrides,
+  ColorReplacement,
   ColorRole,
   CvdType,
   ThemeCollection,
