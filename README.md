@@ -33,6 +33,15 @@ The pipeline converts each color to OKLCH, flips lightness for dark mode, preser
 
 ### Customizing a theme
 
+Every theme definition supports:
+
+| Field | Purpose |
+| --- | --- |
+| `background` | Exact page background; white SVG fills fall back to this color |
+| `minContrast` | WCAG minimum contrast ratios for text, strokes, and fills |
+| `colors` | Role-wide replacements for every `text`, `stroke`, or `fill` color |
+| `overrides` | Exact source-color replacements by hex, either for all roles or per role |
+
 The default theme is split into separate light and dark files:
 
 | File | Used by |
@@ -50,6 +59,72 @@ background: '#faf6ee', // cream
 background: '#0b1220', // dark blue
 ```
 
+#### Replace every text, stroke, or fill color
+
+Use `colors` to control a whole role:
+
+```ts
+colors: {
+  text: '#1f2937',
+  stroke: '#334155',
+  // fill omitted, so fills keep automatic recoloring
+},
+```
+
+Every text color becomes `#1f2937` unless an exact `overrides` entry matches first. The same applies to `stroke` and `fill`. Set a role to `null` to keep all of its original colors.
+
+#### Replace a specific source color
+
+Use `overrides` to target exact source colors. A string applies to every role:
+
+```ts
+overrides: {
+  '#e03131': '#b91c1c',
+  '#ffc9c9': '#fee2e2',
+},
+```
+
+Use an object to set different replacements per role:
+
+```ts
+overrides: {
+  '#1e1e1e': {
+    text: '#1f2937',
+    stroke: '#334155',
+  },
+  '#1971c2': { stroke: '#0f766e', fill: '#ccfbf1' },
+  '#2f9e44': null, // keep the original green
+},
+```
+
+Short and long hex values are matched together: an override for `#fff` also matches source color `#ffffff`.
+
+#### Color resolution order
+
+For each SVG color:
+
+1. Exact `overrides[sourceHex][role]`
+2. Exact `overrides[sourceHex]` as an all-role string
+3. Role-wide `colors[role]`
+4. White fill → theme `background`
+5. Automatic OKLCH recoloring and contrast enforcement
+
+Explicit replacements are written exactly as configured and bypass automatic contrast adjustment. Choose values that remain readable against your background. `null` keeps the original source color unchanged.
+
+#### Common Excalidraw colors
+
+| Source color | Excalidraw use |
+| --- | --- |
+| `#1e1e1e` | Default text and stroke |
+| `#e03131` | Red stroke |
+| `#2f9e44` | Green stroke |
+| `#1971c2` | Blue stroke |
+| `#f08c00` | Orange stroke |
+| `#ffc9c9` | Red fill |
+| `#b2f2bb` | Green fill |
+| `#a5d8ff` | Blue fill |
+| `#ffec99` | Yellow fill |
+
 ### Adding a named theme
 
 Create a theme collection with its own light and dark variants, for example `src/themes/rvfolio.ts`:
@@ -61,13 +136,25 @@ export const rvfolioTheme = {
   light: {
     background: '#faf6ee',
     minContrast: { text: 4.5, stroke: 3, fill: 0 },
+    colors: { text: '#1f2937' },
+    overrides: {
+      '#1e1e1e': { text: '#1f2937', stroke: '#334155' },
+      '#e03131': '#b91c1c',
+    },
   },
   dark: {
     background: '#0b1220',
     minContrast: { text: 4.5, stroke: 3, fill: 0 },
+    colors: { text: '#e5e7eb' },
+    overrides: {
+      '#1e1e1e': { text: '#e5e7eb', stroke: '#cbd5e1' },
+      '#e03131': '#f87171',
+    },
   },
 } satisfies ThemeCollection;
 ```
+
+The full Excalidraw-oriented example lives in `src/themes/rvfolio.ts`.
 
 Register it in `src/themes/index.ts`:
 
@@ -80,7 +167,7 @@ export const THEMES = {
 
 The registry key becomes the `?theme=` value. Use `?theme=rvfolio&tm=light` or `?theme=rvfolio&tm=dark`; omitting `tm` defaults to light.
 
-White SVG fills are replaced with the exact theme background, and text/stroke contrast is calculated against it. Adjust `minContrast` if your site needs stricter or looser WCAG thresholds. CVD matrices live in `src/themes/cvd.ts`.
+Adjust `minContrast` if your site needs stricter or looser WCAG thresholds. CVD matrices live in `src/themes/cvd.ts`.
 
 ## Server-Timing
 
@@ -172,7 +259,7 @@ src/
     index.ts            Theme registry and named theme lookup
     light.ts            Default light theme: background and contrast
     dark.ts             Default dark theme: background and contrast
-    rvfolio.ts          rvfolio light/dark theme collection
+    rvfolio.ts          rvfolio light/dark colors and replacements
     cvd.ts              Color-vision-deficiency matrices
     types.ts            Shared theme types
   services/
