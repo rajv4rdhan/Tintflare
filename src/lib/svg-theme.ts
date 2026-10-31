@@ -1,5 +1,5 @@
 import { luminanceOf, transformColor } from './color';
-import { THEMES, type ColorRole, type CvdType } from './theme';
+import { THEMES, type ColorRole, type CvdType } from '../themes';
 
 export interface SvgThemeOptions {
   dark: boolean;
@@ -25,13 +25,15 @@ export function getSvgThemeOptions(
 ): SvgThemeOptions | undefined {
   if (!key.toLowerCase().endsWith('.svg')) return undefined;
 
-  const dark = url.searchParams.get('tm') === 'dark';
+  const requestedTheme = url.searchParams.get('tm')?.toLowerCase();
+  const hasTheme = requestedTheme === 'light' || requestedTheme === 'dark';
+  const dark = requestedTheme === 'dark';
   const cvd =
     url.searchParams.get('cvd')?.toLowerCase() === 'deutan'
       ? 'deutan'
       : undefined;
 
-  if (!dark && !cvd) return undefined;
+  if (!hasTheme && !cvd) return undefined;
 
   return { dark, cvd };
 }

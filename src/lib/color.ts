@@ -3,7 +3,7 @@ import {
   type ColorRole,
   type CvdType,
   type ThemeDefinition,
-} from './theme';
+} from '../themes';
 
 export type Rgb = readonly [number, number, number];
 

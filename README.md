@@ -9,7 +9,7 @@ A Cloudflare Worker that serves static assets from a private Backblaze B2 bucket
 - Successful asset responses are cached at the edge for 24 hours.
 - B2 authorization tokens are cached per Worker isolate for 23 hours.
 - A missing asset serves `404.html` from the bucket, or a built-in fallback page.
-- SVG assets are remapped at the edge: `?tm=dark` for the dark theme and `?cvd=deutan` for a deuteranopia-safe variant.
+- SVG assets are remapped at the edge: `?tm=light` for the light theme, `?tm=dark` for the dark theme, and `?cvd=deutan` for a deuteranopia-safe variant.
 - Responses include `Server-Timing` metrics for cache, parse, transform, and total time.
 - Only `GET` and `HEAD` requests are allowed.
 
@@ -19,13 +19,33 @@ SVG assets can be remapped at the edge:
 
 | Query | Result |
 | --- | --- |
-| `?tm=dark` | Perceptual OKLCH dark variant |
-| `?cvd=deutan` | Deuteranopia-safe variant (light theme) |
+| `?tm=light` | Perceptual light variant, using `src/themes/light.ts` |
+| `?tm=dark` | Perceptual dark variant, using `src/themes/dark.ts` |
+| `?cvd=deutan` | Deuteranopia-safe light variant |
 | `?tm=dark&cvd=deutan` | Both |
 
 The pipeline converts each color to OKLCH, flips lightness for dark mode, preserves hue and chroma, gamut-maps back to sRGB, and enforces WCAG contrast for text and strokes. White fills map to the exact theme background.
 
-Theme background colors, contrast thresholds, and CVD matrices live in `src/lib/theme.ts`. Set `THEMES.dark.background` to the blog's exact dark background color.
+### Customizing a theme
+
+Each theme has its own file, so light and dark mode can match different site designs independently:
+
+| File | Used by |
+| --- | --- |
+| `src/themes/light.ts` | `?tm=light` and the light variant used by `?cvd=deutan` |
+| `src/themes/dark.ts` | `?tm=dark` |
+
+Set `background` to the exact page background your site uses. For example, a cream light theme and a dark-blue theme:
+
+```ts
+// src/themes/light.ts
+background: '#faf6ee', // cream
+
+// src/themes/dark.ts
+background: '#0b1220', // dark blue
+```
+
+White SVG fills are replaced with the exact theme background, and text/stroke contrast is calculated against it. Adjust `minContrast` if your site needs stricter or looser WCAG thresholds. The available themes are registered in `src/themes/index.ts`, and CVD matrices live in `src/themes/cvd.ts`.
 
 ## Server-Timing
 
@@ -113,7 +133,12 @@ src/
     paths.ts            URL pathname to B2 object key mapping
     server-timing.ts    Server-Timing collector and response header
     svg-theme.ts        SVG color replacement pipeline
-    theme.ts            Theme storage: backgrounds, contrast, CVD matrices
+  themes/
+    index.ts            Theme registry
+    light.ts            Light theme: background and contrast
+    dark.ts             Dark theme: background and contrast
+    cvd.ts              Color-vision-deficiency matrices
+    types.ts            Shared theme types
   services/
     backblaze.ts        B2 authorization and file downloads
 ```
