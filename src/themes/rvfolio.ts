@@ -69,7 +69,7 @@ export const rvfolioTheme = {
   },
 
   dark: {
-    background: '#121110', // .dark --paper
+    background: '#181716', // .dark --paper
 
     minContrast: {
       // WCAG AA for normal text.
