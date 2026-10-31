@@ -35,6 +35,11 @@ export async function serveAsset(
   if (!key) return buildTextResponse('Bad Request', 400);
 
   const svgTheme = getSvgThemeOptions(url, key);
+
+  if (svgTheme.status === 'invalid') {
+    return buildTextResponse(svgTheme.message, 400);
+  }
+
   const upstream = await fetchFile(config, key);
 
   if (upstream.status === 404) {
@@ -48,8 +53,8 @@ export async function serveAsset(
 
   let response: Response;
 
-  if (svgTheme && request.method === 'GET') {
-    const themed = applySvgTheme(await upstream.text(), svgTheme);
+  if (svgTheme.status === 'themed' && request.method === 'GET') {
+    const themed = applySvgTheme(await upstream.text(), svgTheme.options);
     timing.add('parse', themed.parseMs);
     timing.add('transform', themed.transformMs);
     response = buildSvgResponse(themed.svg, upstream);

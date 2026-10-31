@@ -1,10 +1,23 @@
 import { luminanceOf, transformColor } from './color';
-import { THEMES, type ColorRole, type CvdType } from '../themes';
+import {
+  THEMES,
+  isThemeName,
+  type ColorRole,
+  type CvdType,
+  type ThemeMode,
+  type ThemeName,
+} from '../themes';
 
 export interface SvgThemeOptions {
-  dark: boolean;
+  theme: ThemeName;
+  mode: ThemeMode;
   cvd?: CvdType;
 }
+
+export type SvgThemeSelection =
+  | { status: 'none' }
+  | { status: 'themed'; options: SvgThemeOptions }
+  | { status: 'invalid'; message: string };
 
 export interface SvgThemeResult {
   svg: string;
@@ -22,27 +35,54 @@ const TEXT_ELEMENTS = new Set(['text', 'tspan', 'textpath']);
 export function getSvgThemeOptions(
   url: URL,
   key: string,
-): SvgThemeOptions | undefined {
-  if (!key.toLowerCase().endsWith('.svg')) return undefined;
+): SvgThemeSelection {
+  if (!key.toLowerCase().endsWith('.svg')) return { status: 'none' };
 
-  const requestedTheme = url.searchParams.get('tm')?.toLowerCase();
-  const hasTheme = requestedTheme === 'light' || requestedTheme === 'dark';
-  const dark = requestedTheme === 'dark';
+  const requestedTheme = url.searchParams.get('theme')?.trim().toLowerCase();
+  const requestedMode = url.searchParams.get('tm')?.trim().toLowerCase();
   const cvd =
-    url.searchParams.get('cvd')?.toLowerCase() === 'deutan'
+    url.searchParams.get('cvd')?.trim().toLowerCase() === 'deutan'
       ? 'deutan'
       : undefined;
 
-  if (!hasTheme && !cvd) return undefined;
+  if (!requestedTheme && !requestedMode && !cvd) {
+    return { status: 'none' };
+  }
 
-  return { dark, cvd };
+  let theme: ThemeName = 'default';
+
+  if (requestedTheme) {
+    if (!isThemeName(requestedTheme)) {
+      return {
+        status: 'invalid',
+        message: `Unknown theme: "${requestedTheme}".`,
+      };
+    }
+
+    theme = requestedTheme;
+  }
+
+  let mode: ThemeMode = 'light';
+
+  if (requestedMode) {
+    if (requestedMode !== 'light' && requestedMode !== 'dark') {
+      return {
+        status: 'invalid',
+        message: `Unknown theme mode: "${requestedMode}". Use light or dark.`,
+      };
+    }
+
+    mode = requestedMode;
+  }
+
+  return { status: 'themed', options: { theme, mode, cvd } };
 }
 
 export function applySvgTheme(
   svg: string,
   options: SvgThemeOptions,
 ): SvgThemeResult {
-  const theme = options.dark ? THEMES.dark : THEMES.light;
+  const theme = THEMES[options.theme][options.mode];
   const backgroundLuminance = luminanceOf(theme.background);
   const colors: ColorOccurrence[] = [];
 
@@ -68,7 +108,7 @@ export function applySvgTheme(
         transformColor(hex, {
           theme,
           role,
-          dark: options.dark,
+          dark: options.mode === 'dark',
           cvd: options.cvd,
           backgroundLuminance,
         }),
