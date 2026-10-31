@@ -1,0 +1,38 @@
+# Checks every push to main and every pull request. Deploys stay with
+# Cloudflare (Workers Builds and Pages); this only makes sure they'd succeed.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Type-check, build, theme contrast
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Build the worker bundle
+        run: npm run build
+
+      - name: Check theme contrast
+        run: npm run check:themes

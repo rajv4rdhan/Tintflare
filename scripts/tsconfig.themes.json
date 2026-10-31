@@ -1,0 +1,15 @@
+{
+  // Compiles only the theme files, as CommonJS, so scripts/check-themes.mjs
+  // can load them in plain Node. Output goes to .cache/ (gitignored).
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "rootDir": "../src/themes",
+    "outDir": "../.cache/themes",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["../src/themes/**/*.ts"]
+}

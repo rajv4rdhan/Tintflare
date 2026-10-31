@@ -19,6 +19,7 @@
     "predeploy": "npm run typecheck && npm run build",
     "secrets": "wrangler secret bulk .env",
     "typecheck": "tsc --noEmit",
+    "check:themes": "tsc -p scripts/tsconfig.themes.json && node scripts/check-themes.mjs",
     "cf-typegen": "wrangler types",
     "showcase": "npm run build && node scripts/showcase.mjs"
   },

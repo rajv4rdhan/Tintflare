@@ -406,13 +406,41 @@ Each of these would make a good first contribution. Open an issue to claim one o
 | `npm run deploy` | Type-check, build, upload secrets, deploy |
 | `npm run secrets` | Upload `.env` values as Worker secrets |
 | `npm run cf-typegen` | Regenerate `worker-configuration.d.ts` |
+| `npm run check:themes` | Fail if any hand-picked theme color is below its contrast target |
+| `npm run showcase` | Serve the showcase in `web/` through the real worker at `localhost:8790`, with `web/` standing in for B2 |
+
+### Continuous integration
+
+Two GitHub Actions workflows live in [`.github/workflows/`](.github/workflows). Deploys stay with Cloudflare: Workers Builds deploys the worker and Pages deploys the showcase.
+
+| Workflow | Runs on | What it does |
+| --- | --- | --- |
+| [CI](.github/workflows/ci.yml) | every push to `main` and every pull request | `npm run typecheck`, `npm run build`, `npm run check:themes` |
+| [Sync drawings to B2](.github/workflows/sync-drawings.yml) | pushes to `main` that change `web/drawings/**.svg`, or a manual run | Uploads those SVGs to `drawings/` in the bucket. It never deletes anything. |
+
+The sync workflow needs four repository secrets (**Settings → Secrets and variables → Actions**):
+
+| Secret | Value |
+| --- | --- |
+| `B2_SYNC_KEY_ID` | An application key ID with **Read and Write** access to the bucket. Keep it separate from the worker's read-only key. |
+| `B2_SYNC_APPLICATION_KEY` | That application key |
+| `B2_BUCKET_NAME` | The bucket the worker reads from |
+| `B2_REGION` | The bucket's region, shown in its S3 endpoint, e.g. `us-west-004` |
+
+> [!NOTE]
+> A re-uploaded drawing keeps its URL. Readers who already cached a `?v=` URL keep the old copy for up to a year, so bump `v` when you change a published drawing.
 
 <details>
 <summary><b>Project layout</b></summary>
 
 ```text
+.github/workflows/      CI and the drawings-to-B2 sync
 docs/
   images/               Screenshots used in this README
+scripts/
+  check-themes.mjs      Contrast check for hand-picked theme colors
+  showcase.mjs          Local showcase server (Miniflare, web/ as the bucket)
+web/                    The showcase site and its drawings
 src/
   index.ts              Entry point: method check, error handling, Server-Timing
   config.ts             Environment validation and typed configuration
@@ -433,6 +461,8 @@ src/
     types.ts            Theme types
     light.ts, dark.ts   The default theme
     rvfolio.ts          rvfolio palette
+    blueprint.ts, chalkboard.ts, phosphor.ts, riso.ts, synthwave.ts
+                        Showcase palettes
     cvd.ts              Color vision deficiency matrices
   services/
     backblaze.ts        B2 authorization and downloads
@@ -457,7 +487,7 @@ Contributions of every size are welcome: a typo fix, a new theme, a bug report w
 1. Fork the repository and create a branch from `main`.
 2. Run it locally with `npm install` and `npm run dev` (see [Run and deploy from your machine](#2b-run-and-deploy-from-your-machine)).
 3. Keep the change focused, and match the existing code style: small functions, JSDoc on anything non-obvious.
-4. Run `npm run typecheck` and `npm run build`. Both must pass.
+4. Run `npm run typecheck`, `npm run build` and `npm run check:themes`. All three must pass, and CI runs the same checks on your pull request.
 5. If you change how colors are transformed, add a before/after screenshot of a real diagram to the PR.
 6. If you change behavior, update this README in the same PR.
 

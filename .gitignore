@@ -1,6 +1,7 @@
 node_modules/
 .wrangler/
 dist/
+.cache/
 .dev.vars
 .env
 .env.*
