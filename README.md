@@ -2,7 +2,7 @@
 
 A Cloudflare Worker that serves static assets from a private Backblaze B2 bucket, with edge caching and a custom 404 page.
 
-## How it works
+## How it works 
 
 - `/` and directory paths (for example `/blog/`) resolve to `index.html`.
 - Other paths map directly to an object key in the bucket.
