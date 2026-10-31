@@ -27,10 +27,11 @@ const TEXT_ELEMENTS = new Set(['text', 'tspan', 'textpath']);
 /**
  * `property: value` paint declarations inside a `style` attribute or a CSS
  * rule body. Groups: leading boundary, property, separator, value, trailing
- * whitespace before `;`, `!important`, or the end.
+ * whitespace before `;`, `!important`, or the end. `background-color` covers
+ * HTML labels inside `<foreignObject>`, as draw.io and Mermaid export them.
  */
 const PAINT_DECLARATION =
-  /(^|[\s;])(fill|stroke|color|stop-color|flood-color|lighting-color)(\s*:\s*)([^;!\s][^;!]*?)(\s*)(?=;|!|$)/gi;
+  /(^|[\s;])(fill|stroke|color|background-color|stop-color|flood-color|lighting-color)(\s*:\s*)([^;!\s][^;!]*?)(\s*)(?=;|!|$)/gi;
 
 /**
  * CSS rules without nested braces. Rules inside `@media` blocks still match,
@@ -227,6 +228,7 @@ function roleForProperty(
       return 'text';
     case 'fill':
       return isText ? 'text' : 'fill';
+    case 'background-color':
     case 'stop-color':
     case 'flood-color':
     case 'lighting-color':

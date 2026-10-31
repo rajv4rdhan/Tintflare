@@ -88,7 +88,7 @@ The Worker signs in to B2 once and reuses that authorization for 23 hours within
 
 Each SVG streams through Cloudflare's [`HTMLRewriter`](https://developers.cloudflare.com/workers/runtime-apis/html-rewriter/), so the file is never held in memory all at once. For every paint color it finds, Tintflare:
 
-1. **Finds the color** in presentation attributes (`fill`, `stroke`, `color`, `stop-color`, `flood-color`, `lighting-color`), in `style="…"` attributes, and in `<style>` sheets, including rules inside `@media`.
+1. **Finds the color** in presentation attributes (`fill`, `stroke`, `color`, `stop-color`, `flood-color`, `lighting-color`), in `style="…"` attributes, and in `<style>` sheets, including rules inside `@media`. Inline `background-color` is covered too, for the HTML labels that draw.io and Mermaid put inside `<foreignObject>`.
 2. **Works out its role.** Fill on `<text>`/`<tspan>` is *text*, `stroke` is *stroke*, and everything else is *fill*.
 3. **Uses your exact replacement** if the theme defines one for that color and role.
 4. **Otherwise recolors it automatically:**
@@ -104,7 +104,7 @@ Everything inside `<mask>` and `<clipPath>` is left alone. Mask colors encode op
 
 - 🎨 **Per-theme palettes**: role-wide colors, exact per-color overrides, or fully automatic recoloring
 - ♿ **Contrast-aware**: automatic colors meet WCAG AA against your real page background
-- 🧩 **Reads real-world SVG**: hex (3/4/6/8 digits), `rgb()`, `hsl()`, all 148 CSS named colors, and alpha
+- 🧩 **Works with any drawing tool**: Excalidraw, draw.io, Mermaid, Figma, and anything else that writes hex (3/4/6/8 digits), `rgb()`, `hsl()`, the 148 CSS named colors, or `light-dark()`, with alpha kept
 - 🌊 **Streaming**: `HTMLRewriter` transforms as bytes arrive
 - 🗄️ **Cache-friendly**: normalized edge cache keys, one-year `immutable` URLs, ETags, and `304 Not Modified`
 - 🔁 **Re-theme without re-exporting**: change a palette, deploy, bump `v`, and every diagram follows

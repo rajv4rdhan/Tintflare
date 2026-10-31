@@ -4,258 +4,128 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Tintflare · Export once. Re-theme forever.</title>
-  <meta name="description" content="Tintflare is an open-source Cloudflare Worker that re-tints Excalidraw SVGs from a private Backblaze B2 bucket to match your site's theme, at the edge, with zero client-side recoloring." />
+  <meta name="description" content="An open-source Cloudflare Worker that repaints Excalidraw SVGs from a private Backblaze B2 bucket to match your site's theme, at the edge." />
   <meta name="color-scheme" content="light dark" />
 
   <!--
-    Where the drawings come from. Leave empty when this page is served by
-    Tintflare itself (the drawings sit next to it in the bucket). Set it to a
-    Tintflare origin, e.g. https://tintflare.example.workers.dev, to preview
-    this page from anywhere else.
+    Where the drawings come from. Leave empty: the page uses its own address
+    when it is served by Tintflare, and the public worker anywhere else.
+    Set a Tintflare origin here to force one.
   -->
   <meta name="tintflare-cdn" content="" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Caveat:wght@500..700&family=Fraunces:ital,opsz,wght@0,9..144,400..800;1,9..144,400..800&family=Gochi+Hand&family=JetBrains+Mono:wght@400..700&family=Monoton&family=Space+Grotesk:wght@400..700&family=VT323&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..600&family=Geist+Mono:wght@400..500&family=Instrument+Serif:ital@0;1&display=swap" />
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- Pick the paint before first paint, so the page never flashes the wrong theme. -->
+  <!-- Pick the paint before first paint, so the page never flashes the wrong one. -->
   <script>
     (function () {
-      var root = document.documentElement;
-      var themes = ['default', 'rvfolio', 'blueprint', 'chalkboard', 'phosphor', 'riso', 'synthwave'];
-      var hash = location.hash.replace('#', '').split('/');
+      var paints = ['rvfolio', 'riso', 'blueprint', 'chalkboard', 'phosphor', 'synthwave', 'default'];
+      var hash = location.hash.slice(1).split('/');
       var saved = {};
       try { saved = JSON.parse(localStorage.getItem('tintflare:paint') || '{}'); } catch (e) {}
-      var theme = themes.indexOf(hash[0]) > -1 ? hash[0] : themes.indexOf(saved.theme) > -1 ? saved.theme : 'riso';
-      var mode = hash[1] === 'light' || hash[1] === 'dark' ? hash[1]
-        : saved.mode === 'light' || saved.mode === 'dark' ? saved.mode
+      var paint = paints.indexOf(hash[0]) > -1 ? hash[0] : paints.indexOf(saved.theme) > -1 ? saved.theme : 'rvfolio';
+      var mode = /^(light|dark)$/.test(hash[1]) ? hash[1]
+        : /^(light|dark)$/.test(saved.mode) ? saved.mode
         : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      root.dataset.theme = theme;
-      root.dataset.mode = mode;
+      document.documentElement.dataset.theme = paint;
+      document.documentElement.dataset.mode = mode;
     })();
   </script>
   <script src="app.js" defer></script>
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <div class="texture" aria-hidden="true"></div>
-
-  <header class="topbar">
-    <a class="brand" href="#top" aria-label="Tintflare home">
-      <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
-        <path class="drop" d="M20 4c6 8 12 14.5 12 21.5A12 12 0 0 1 8 25.5C8 18.5 14 12 20 4Z" />
-        <path class="shine" d="M14.5 26.5a6 6 0 0 0 5 5" />
-        <path class="spark" d="M31 6v6M28 9h6" />
-      </svg>
-      <span>Tintflare</span>
-    </a>
-    <nav class="nav" aria-label="Sections">
-      <a href="#wall">Paints</a>
-      <a href="#compare">Before / after</a>
-      <a href="#itemized">Receipt</a>
-      <a href="#how">How</a>
-      <a href="https://github.com/rajv4rdhan/Tintflare">GitHub</a>
+  <header class="bar">
+    <a class="mark" href="#top" aria-label="Tintflare, back to top">tintflare<span class="mark-dot" aria-hidden="true"></span></a>
+    <nav class="links" aria-label="Site">
+      <a href="#how">how</a>
+      <a href="https://github.com/rajv4rdhan/Tintflare">github</a>
+      <button class="mode" type="button" aria-label="Switch between light and dark" title="Light / dark (D)">
+        <span class="mode-light">light</span><span class="mode-sep">/</span><span class="mode-dark">dark</span>
+      </button>
     </nav>
-    <button class="mode-toggle" type="button" aria-label="Switch light or dark" title="Light / dark (D)">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <g class="sun"><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" /></g>
-        <path class="moon" d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" />
-      </svg>
-      <span class="mode-label">light</span>
-    </button>
   </header>
 
-  <main id="main">
-    <!-- ============ HERO ============ -->
-    <section class="hero" id="top">
-      <div class="hero-copy">
-        <p class="eyebrow"><span class="dot"></span> open source · Cloudflare Workers + Backblaze B2</p>
-        <h1 class="display">
-          Export once.<br />
-          <span class="swash">Re-theme</span> forever.
-        </h1>
-        <p class="lede">
-          Tintflare is a tiny paint shop at the edge. Keep your Excalidraw diagrams exactly as you drew them.
-          Every request gets repainted to match your site, today and after next year's redesign.
-        </p>
-        <div class="cta-row">
-          <a class="btn" href="#wall">Pick a paint</a>
-          <a class="btn btn-ghost" href="https://github.com/rajv4rdhan/Tintflare#-get-started">Self-host in 10 minutes</a>
-        </div>
-      </div>
+  <main id="top">
+    <section class="hero">
+      <p class="kicker">an open-source edge worker for excalidraw svgs</p>
+      <h1 class="title">Export once.<br /><em>Re-theme</em> forever.</h1>
 
-      <figure class="stage" aria-live="polite">
-        <div class="stage-frame">
-          <span class="tape tape-l" aria-hidden="true"></span>
-          <span class="tape tape-r" aria-hidden="true"></span>
-          <img id="hero-img" class="drawing" width="1280" height="700" alt="An Excalidraw diagram: a B2 bucket sends one exported SVG to Tintflare, a paint shop at the edge, which repaints it for light, dark, and next year's theme. Tinty the chameleon blends in." />
-          <p class="stage-error" hidden>
-            This paint isn't on the worker yet. Deploy Tintflare with the showcase themes, then reload.
-          </p>
-        </div>
-        <figcaption class="annotation">
-          <svg class="scribble" viewBox="0 0 120 60" aria-hidden="true"><path d="M110 8C82 4 40 10 22 40m0 0 2-14m-2 14 13-4" /></svg>
-          one SVG file, now wearing <b class="paint-name">Riso · dark</b>
+      <figure class="canvas">
+        <img id="tinty" width="900" height="400" alt="Tinty, a hand-drawn chameleon on a branch, repainted to match this page." />
+        <p class="canvas-error" hidden>Couldn't reach the worker for this paint.</p>
+        <figcaption class="caption">
+          <span class="caption-text">one svg, wearing <i class="paint-name">paper &amp; ink</i></span>
+          <button class="peek" type="button" aria-pressed="false" title="Original (O)">see the original</button>
         </figcaption>
       </figure>
 
-      <div class="rail-wrap">
-        <div class="chip-rail" role="radiogroup" aria-label="Paint"></div>
-        <p class="kbd-hint">
-          <kbd>←</kbd><kbd>→</kbd> change paint · <kbd>D</kbd> light/dark · <kbd>R</kbd> surprise me
-        </p>
-      </div>
+      <div class="paints" role="radiogroup" aria-label="Paint"></div>
+
+      <button class="url" type="button" title="Copy URL">
+        <code><span class="url-path">/drawings/tinty.svg</span>?theme=<b data-part="theme">rvfolio</b>&amp;tm=<b data-part="mode">light</b></code>
+        <span class="url-copied" aria-live="polite"></span>
+      </button>
+      <p class="keys"><kbd>←</kbd> <kbd>→</kbd> paint &nbsp;·&nbsp; <kbd>D</kbd> dark &nbsp;·&nbsp; <kbd>O</kbd> original</p>
     </section>
 
-    <!-- ============ URL ANATOMY + LIVE RECEIPT ============ -->
-    <section class="section anatomy" aria-labelledby="anatomy-title">
-      <h2 id="anatomy-title" class="section-title"><span class="num">01</span> It's just a URL</h2>
-      <p class="section-lede">No build step, no JavaScript recoloring, no second export. The paint is part of the address.</p>
-      <div class="url-card">
-        <code class="url-line" aria-label="Request URL">
-          <span class="u-path">/drawings/tintflare-story.svg</span><span class="u-sep">?</span><span class="u-key">theme</span>=<span class="u-val" data-part="theme">riso</span><span class="u-sep">&amp;</span><span class="u-key">tm</span>=<span class="u-val" data-part="mode">dark</span><span class="u-sep">&amp;</span><span class="u-key">v</span>=<span class="u-val" data-part="v">1</span>
-        </code>
-        <ol class="url-notes">
-          <li><b>the file</b> exactly as Excalidraw exported it, in a private B2 bucket</li>
-          <li><b>theme</b> which paint to use: one TypeScript file per palette</li>
-          <li><b>tm</b> light or dark, matching your page</li>
-          <li><b>v</b> bump it after a redesign; browsers cache each version for a year</li>
-        </ol>
-        <button class="copy-btn" type="button">Copy URL</button>
-      </div>
-
-      <div class="ticket" role="status" aria-live="polite">
-        <p class="ticket-head">REQUEST TICKET <span class="ticket-no">#0001</span></p>
-        <dl class="ticket-rows">
-          <div><dt>paint</dt><dd data-t="paint">—</dd></div>
-          <div><dt>edge cache</dt><dd data-t="cache">—</dd></div>
-          <div><dt>time</dt><dd data-t="time">—</dd></div>
-          <div><dt>size</dt><dd data-t="size">—</dd></div>
-          <div><dt>client recolor JS</dt><dd>0 bytes</dd></div>
-        </dl>
-        <p class="ticket-foot">thank you for not re-exporting ♥</p>
-      </div>
-    </section>
-
-    <!-- ============ PAINT WALL ============ -->
-    <section class="section" id="wall" aria-labelledby="wall-title">
-      <h2 id="wall-title" class="section-title"><span class="num">02</span> The paint wall</h2>
-      <p class="section-lede">
-        Seven paints, one drawing. Every chip below is the <em>same</em> <code>palette-card.svg</code>, served by the worker
-        with a different <code>?theme=</code>. Tap one to repaint this whole page.
-      </p>
-      <div class="wall-grid"></div>
-    </section>
-
-    <!-- ============ BEFORE / AFTER ============ -->
-    <section class="section" id="compare" aria-labelledby="compare-title">
-      <h2 id="compare-title" class="section-title"><span class="num">03</span> Before / after</h2>
-      <p class="section-lede">Drag the handle. Left is the export as-is on this page. Right is what Tintflare serves.</p>
-
-      <div class="slider" style="--split: 50%">
-        <img class="slider-after drawing" alt="The diagram as served by Tintflare in the current paint" width="1280" height="700" />
-        <img class="slider-before drawing" alt="The same diagram exactly as exported, with its original colors" width="1280" height="700" />
-        <span class="slider-label left">as exported</span>
-        <span class="slider-label right">as served</span>
-        <span class="slider-handle" aria-hidden="true"><span></span></span>
-        <input class="slider-input" type="range" min="0" max="100" value="50" aria-label="Before and after split" />
-      </div>
-
-      <div class="versus">
-        <figure class="versus-card">
-          <div class="versus-frame dark-swatch">
-            <img class="inverted drawing" alt="The export run through a CSS invert and hue-rotate filter" width="1280" height="700" />
-          </div>
-          <figcaption>
-            <b>CSS <code>invert(1) hue-rotate(180deg)</code></b>
-            Flips every pixel. Pastels turn muddy, hues drift, and nothing guarantees contrast.
-          </figcaption>
-        </figure>
-        <figure class="versus-card">
-          <div class="versus-frame dark-swatch">
-            <img class="tinted-dark drawing" alt="The same diagram in the current paint's dark mode, served by Tintflare" width="1280" height="700" />
-          </div>
-          <figcaption>
-            <b>Tintflare <code>?tm=dark</code></b>
-            Hand-picked colors, WCAG-checked against the real background, chosen once in a theme file.
-          </figcaption>
-        </figure>
-      </div>
-    </section>
-
-    <!-- ============ ITEMIZED ============ -->
-    <section class="section" id="itemized" aria-labelledby="itemized-title">
-      <h2 id="itemized-title" class="section-title"><span class="num">04</span> Every swap, itemized</h2>
-      <p class="section-lede">
-        Your browser fetched the original and the repainted file and compared them, color by color. This is the worker's real output, not a mockup.
-      </p>
-      <div class="itemized">
-        <ul class="swap-list" aria-live="polite"></ul>
-        <figure class="code-card">
-          <figcaption><span class="file-name">src/themes/riso.ts</span> <span class="hint">reconstructed from the swaps</span></figcaption>
-          <pre><code class="theme-code"></code></pre>
-        </figure>
-      </div>
-    </section>
-
-    <!-- ============ HOW ============ -->
-    <section class="section" id="how" aria-labelledby="how-title">
-      <h2 id="how-title" class="section-title"><span class="num">05</span> How the paint gets on</h2>
+    <section class="how" id="how" aria-labelledby="how-title">
+      <h2 id="how-title" class="h2">Your drawing never changes. <em>Its colors do.</em></h2>
+      <img id="flow" class="flow" width="900" height="220" loading="lazy" alt="A bucket, an arrow to the edge, which repaints, and an arrow to your page." />
       <ol class="steps">
-        <li class="step">
-          <span class="step-icon" aria-hidden="true">
-            <svg viewBox="0 0 64 64"><ellipse cx="32" cy="16" rx="20" ry="6" /><path d="M12 16v30c0 3.3 9 6 20 6s20-2.7 20-6V16" /><path d="M24 4h14l6 6v10" /></svg>
-          </span>
-          <h3>Drop it in the bucket</h3>
-          <p>Export from Excalidraw once and upload it to a private B2 bucket. Its first 10 GB are free, and so is the egress to Cloudflare.</p>
-        </li>
-        <li class="step">
-          <span class="step-icon" aria-hidden="true">
-            <svg viewBox="0 0 64 64"><path d="M14 44a10 10 0 0 1 2-19.8A14 14 0 0 1 43 20a11 11 0 0 1 7 24Z" /><path d="M26 34l5 5 9-11" /></svg>
-          </span>
-          <h3>The edge repaints it</h3>
-          <p>The Worker streams the SVG through <code>HTMLRewriter</code> and swaps every color with your theme's pick, or an OKLCH match that passes contrast checks.</p>
-        </li>
-        <li class="step">
-          <span class="step-icon" aria-hidden="true">
-            <svg viewBox="0 0 64 64"><rect x="8" y="12" width="48" height="38" rx="5" /><path d="M8 22h48" /><circle cx="15" cy="17" r="1.6" /><circle cx="21" cy="17" r="1.6" /><path d="M20 38l7-7 6 6 11-11" /></svg>
-          </span>
-          <h3>Your page just shows it</h3>
-          <p>A plain <code>&lt;img&gt;</code>. Cached at the edge and in the browser, and it works in RSS readers and with JavaScript turned off.</p>
-        </li>
+        <li><b>Draw once.</b> Export from Excalidraw and drop the SVG into a private Backblaze B2 bucket. The first 10 GB are free.</li>
+        <li><b>Paint at the edge.</b> A Cloudflare Worker streams it through and swaps every color for your theme's, checked for contrast.</li>
+        <li><b>Redesign anytime.</b> Change one theme file and every diagram follows, old and new. No re-export.</li>
       </ol>
+    </section>
 
-      <div class="snippet">
-        <p class="snippet-title">Use it on your site</p>
-<pre><code>&lt;picture&gt;
-  &lt;source media="(prefers-color-scheme: dark)"
-          srcset="https://cdn.you.dev/flow.svg?theme=<span class="hl paint-slug">riso</span>&amp;tm=dark&amp;v=1"&gt;
-  &lt;img src="https://cdn.you.dev/flow.svg?theme=<span class="hl paint-slug">riso</span>&amp;tm=light&amp;v=1" alt="…"&gt;
-&lt;/picture&gt;</code></pre>
+    <section class="any" aria-labelledby="any-title">
+      <h2 id="any-title" class="h2">Any tool. <em>Your</em> palette.</h2>
+      <div class="pair">
+        <div class="col">
+          <p class="label">bring any svg</p>
+          <p class="tools">Excalidraw <span>·</span> draw.io <span>·</span> Mermaid <span>·</span> Figma <span>·</span> yours</p>
+          <p class="small">
+            If it writes its colors as hex, <code>rgb()</code>, <code>hsl()</code>, named colors or <code>light-dark()</code>,
+            in attributes, inline styles or a <code>&lt;style&gt;</code> sheet, Tintflare can repaint it. HTML labels inside
+            <code>&lt;foreignObject&gt;</code> too.
+          </p>
+        </div>
+        <div class="col">
+          <p class="label">mix your own paint</p>
+<pre class="code mini"><code><span class="c">// src/themes/mysite.ts</span>
+export const mysiteTheme = {
+  <span class="code-mode-key">light</span>: {
+    background: '<span class="code-bg">#f7f3ec</span>', <span class="c">// your page</span>
+    minContrast: { text: 4.5, stroke: 3, fill: 0 },
+    overrides: {
+      '#1e1e1e': '<span class="code-ink">#1b1815</span>', <span class="c">// excalidraw ink</span>
+      '#dae8fc': '<span class="code-fill">#dbe2d5</span>', <span class="c">// draw.io blue</span>
+    },
+  },
+  <span class="c">// …and its other mode</span>
+} satisfies ThemeCollection;</code></pre>
+          <p class="small">
+            Your page's background, then a color for each one your drawings use. Register it, deploy, and ask for
+            <code>?theme=mysite</code>. Anything you don't list is matched for you and checked for contrast.
+          </p>
+        </div>
       </div>
     </section>
 
-    <!-- ============ FINALE ============ -->
-    <section class="finale" aria-labelledby="finale-title">
-      <h2 id="finale-title" class="display finale-title">Your bucket.<br />Your colors.<br /><span class="swash">Your edge.</span></h2>
-      <p class="lede">Redesign as often as you like. The diagrams will keep up.</p>
-      <div class="cta-row">
-        <a class="btn" href="https://github.com/rajv4rdhan/Tintflare">Star on GitHub</a>
-        <a class="btn btn-ghost" href="https://github.com/rajv4rdhan/Tintflare#-themes">Mix your own paint</a>
-      </div>
+    <section class="use" aria-labelledby="use-title">
+      <h2 id="use-title" class="h2">It's just an <em>image</em>.</h2>
+      <pre class="code"><code>&lt;img src="https://cdn.you.dev/flow.svg<span class="q">?theme=<span class="code-paint">rvfolio</span>&amp;tm=<span class="code-mode">light</span></span>" alt="…"&gt;</code></pre>
+      <p class="note">No client JavaScript, no second export. It works in RSS readers and with JavaScript off.</p>
+      <p class="cta"><a href="https://github.com/rajv4rdhan/Tintflare#-get-started">Self-host it in ten minutes &rarr;</a></p>
     </section>
   </main>
 
-  <footer class="footer">
-    <p class="made-with">
-      <img src="https://cdn.simpleicons.org/cloudflareworkers/F38020" alt="" width="18" height="18" />
-      <span>+</span>
-      <img src="https://cdn.simpleicons.org/backblaze/E21E29" alt="" width="18" height="18" />
-      This page is served by Tintflare from a Backblaze B2 bucket. Every drawing on it was repainted at the edge; your browser ran no recoloring code.
-    </p>
-    <p class="fine-print">MIT licensed · not affiliated with Cloudflare or Backblaze · drawn with ☕ and too many hex codes · <span class="year"></span></p>
+  <footer class="foot">
+    <span>open source · MIT</span>
+    <span>served from a B2 bucket, repainted on Cloudflare's edge</span>
   </footer>
 </body>
 </html>

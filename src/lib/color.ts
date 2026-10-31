@@ -174,10 +174,17 @@ function enforceContrast(
 
 /**
  * Parses hex (3, 4, 6, or 8 digits), `rgb()`/`rgba()`, `hsl()`/`hsla()` in
- * comma or space syntax, and CSS named colors.
+ * comma or space syntax, and CSS named colors. `light-dark(a, b)` reads as
+ * `a`, the color as drawn: the theme decides what dark mode looks like.
  */
 function parseColor(value: string): ParsedColor | undefined {
   const color = value.trim().toLowerCase();
+
+  const lightDark = /^light-dark\((.*)\)$/.exec(color);
+  if (lightDark) {
+    const first = splitTopLevel(lightDark[1])[0];
+    return first ? parseColor(first) : undefined;
+  }
 
   if (color.startsWith('#')) return parseHex(color.slice(1));
 
@@ -210,6 +217,25 @@ function parseColor(value: string): ParsedColor | undefined {
   }
 
   return { rgb: hslToRgb(hue, saturation, lightness), alpha };
+}
+
+/** Splits on commas that aren't inside parentheses: `rgb(1, 2, 3), #fff`. */
+function splitTopLevel(list: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+
+  for (let i = 0; i < list.length; i += 1) {
+    if (list[i] === '(') depth += 1;
+    else if (list[i] === ')') depth -= 1;
+    else if (list[i] === ',' && depth === 0) {
+      parts.push(list.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+
+  parts.push(list.slice(start).trim());
+  return parts;
 }
 
 function parseHex(digits: string): ParsedColor | undefined {
