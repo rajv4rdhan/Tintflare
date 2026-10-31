@@ -5,5 +5,18 @@
   "compatibility_date": "2026-10-01",
   "observability": {
     "enabled": true
+  },
+  // Exposes the deployed version ID. Themed SVGs key their edge cache and
+  // ETag on it, so a deploy that changes the palette or transform takes effect.
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA"
+  },
+  // Non-production branch builds run `wrangler preview`, which needs this
+  // block. Previews do not inherit bindings, so repeat them here. B2 secrets
+  // come from the Previews Base config: `wrangler preview base-config secret put`.
+  "previews": {
+    "version_metadata": {
+      "binding": "CF_VERSION_METADATA"
+    }
   }
 }

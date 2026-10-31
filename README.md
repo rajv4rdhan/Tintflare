@@ -6,11 +6,11 @@ A Cloudflare Worker that serves static assets from a private Backblaze B2 bucket
 
 - `/` and directory paths (for example `/blog/`) resolve to `index.html`.
 - Other paths map directly to an object key in the bucket.
-- Successful asset responses are cached at the edge for 24 hours.
+- Successful asset responses are cached at the edge and in browsers for 24 hours, or for a year with `?v=` (see [Caching](#caching)).
 - B2 authorization tokens are cached per Worker isolate for 23 hours.
 - A missing asset serves `404.html` from the bucket, or a built-in fallback page.
 - SVG assets are remapped at the edge: `?tm=light` / `?tm=dark` for the default theme, `?theme=rvfolio&tm=dark` for a named theme, and `?cvd=deutan` for a deuteranopia-safe variant.
-- Responses include `Server-Timing` metrics for cache, parse, transform, and total time.
+- Responses include `Server-Timing` metrics for cache status and total time.
 - Only `GET` and `HEAD` requests are allowed.
 
 ## SVG themes
@@ -28,6 +28,16 @@ SVG assets can be remapped at the edge:
 | `?theme=rvfolio&tm=dark&cvd=deutan` | rvfolio dark theme with deuteranopia-safe colors |
 
 An unknown `theme` or `tm` value returns `400 Bad Request`.
+
+The SVG streams through Cloudflare's `HTMLRewriter`, so it is never buffered whole. Colors are recolored in:
+
+- presentation attributes: `fill`, `stroke`, `color`, `stop-color`, `flood-color`, `lighting-color`
+- `style="..."` attributes
+- `<style>` sheets, including rules inside `@media`; `fill` in a rule whose selector names `text` or `tspan` counts as text
+
+Accepted color formats are hex (3, 4, 6, or 8 digits), `rgb()`/`rgba()`, `hsl()`/`hsla()` in comma or space syntax, and CSS named colors such as `black`. Alpha is kept, and translucent results are written as `#rrggbbaa`. Values that are not a fixed color (`none`, `currentColor`, `transparent`, `url(#...)`, `var(...)`) are left as they are.
+
+Everything inside `<mask>` and `<clipPath>` is left untouched. Mask colors encode opacity by luminance: Excalidraw cuts the gap behind arrow labels with white and black mask rects, and recoloring them would hide or invert the arrow.
 
 The pipeline converts each color to OKLCH, flips lightness for dark mode, preserves hue and chroma, gamut-maps back to sRGB, and enforces WCAG contrast for text and strokes. White fills map to the exact theme background.
 
@@ -97,7 +107,7 @@ overrides: {
 },
 ```
 
-Short and long hex values are matched together: an override for `#fff` also matches source color `#ffffff`.
+Overrides match by color value, not spelling: an override for `#fff` also matches `#ffffff`, `white`, and `rgb(255 255 255)`. A translucent source keeps its alpha when the replacement is a color Tintflare can read.
 
 #### Color resolution order
 
@@ -169,16 +179,34 @@ The registry key becomes the `?theme=` value. Use `?theme=rvfolio&tm=light` or `
 
 Adjust `minContrast` if your site needs stricter or looser WCAG thresholds. CVD matrices live in `src/themes/cvd.ts`.
 
+## Caching
+
+| Request | `Cache-Control` |
+| --- | --- |
+| No `v` | `public, max-age=86400` |
+| With `?v=<token>` | `public, max-age=31536000, immutable` |
+
+Use `?v=` for URLs whose content will not change under that token, and bump it when it does: the browser never rechecks an immutable URL, so a re-uploaded file or a palette change only reaches readers through a new `v`. `v` accepts up to 64 letters, digits, dots, dashes, and underscores; anything else returns `400 Bad Request`.
+
+The edge cache key is the path plus only the parameters that change the response (`theme`, `tm`, `cvd`, `v`), normalized and in a fixed order. `?tm=DARK&theme=rvfolio` and `?theme=rvfolio&tm=dark&utm_source=x` share one entry, so stray query strings cannot force refetches from B2. Themed SVG keys also include the deployed Worker version (the `CF_VERSION_METADATA` binding), so after a deploy the edge serves output from the new code instead of the old cached copy.
+
+Responses carry an `ETag`, and a matching `If-None-Match` gets `304 Not Modified`:
+
+| Response | `ETag` |
+| --- | --- |
+| Asset as stored | B2's SHA-1 of the file, or its file ID when B2 has no SHA-1 |
+| Themed SVG | Hash of the source tag, theme, mode, CVD option, and deployed version |
+
 ## Server-Timing
 
 Every response includes a `Server-Timing` header:
 
 ```text
-cache;desc=MISS, parse;dur=1.0, transform;dur=4.0, total;dur=8.0
+cache;desc=MISS, total;dur=8.0
 cache;desc=HIT, total;dur=2.0
 ```
 
-Open DevTools → Network → Timing to see the breakdown. `parse` and `transform` only appear for themed SVG responses; `cache` is `HIT`, `MISS`, or `BYPASS`.
+Open DevTools → Network → Timing to see it. `cache` is `HIT`, `MISS`, or `BYPASS`. Themed SVGs are streamed, so `total` is the time until the response starts, not until the last byte. (Workers also freeze timers during synchronous work, so per-step CPU timings would always read zero.)
 
 ## Local development
 
@@ -249,12 +277,13 @@ src/
     assets.ts           Asset requests and edge caching
     not-found.ts        Custom and fallback 404 responses
   lib/
-    cache.ts            Cloudflare Cache API helpers
-    color.ts            OKLCH conversion, gamut mapping, contrast
-    http.ts             Response builders
+    cache.ts            Cloudflare Cache API helpers and cache keys
+    color.ts            Color parsing, OKLCH conversion, gamut mapping, contrast
+    http.ts             Response builders, cache headers, 304 handling
+    named-colors.ts     CSS named color table
     paths.ts            URL pathname to B2 object key mapping
     server-timing.ts    Server-Timing collector and response header
-    svg-theme.ts        SVG color replacement pipeline
+    svg-theme.ts        Streaming SVG recoloring with HTMLRewriter
   themes/
     index.ts            Theme registry and named theme lookup
     light.ts            Default light theme: background and contrast

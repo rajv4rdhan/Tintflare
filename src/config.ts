@@ -2,6 +2,8 @@ export interface AppConfig {
   readonly accountId: string;
   readonly applicationKey: string;
   readonly bucketName: string;
+  /** Deployed Worker version, or `dev` when the binding is absent. */
+  readonly deploymentId: string;
 }
 
 export class ConfigurationError extends Error {
@@ -29,5 +31,10 @@ export function loadConfig(env: Env): AppConfig {
     );
   }
 
-  return { accountId, applicationKey, bucketName };
+  return {
+    accountId,
+    applicationKey,
+    bucketName,
+    deploymentId: env.CF_VERSION_METADATA?.id ?? 'dev',
+  };
 }
