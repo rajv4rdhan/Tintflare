@@ -5,8 +5,15 @@ import {
   type CvdType,
   type ThemeDefinition,
 } from '../themes';
+import { NAMED_COLORS } from './named-colors';
 
 export type Rgb = readonly [number, number, number];
+
+interface ParsedColor {
+  rgb: Rgb;
+  /** 0 to 1. */
+  alpha: number;
+}
 
 interface Oklch {
   l: number;
@@ -23,31 +30,40 @@ export interface ColorTransformOptions {
 }
 
 /**
- * Remaps one sRGB hex color through OKLCH.
+ * Remaps one CSS color (hex, `rgb()`, `hsl()`, or a named color) through
+ * OKLCH. Returns `undefined` for values that are not a fixed color, such as
+ * `none`, `currentColor`, or `url(#gradient)`, so the caller leaves them.
  *
  * A theme can replace the color exactly through `overrides` or `colors`.
  * Otherwise the pipeline applies the CVD matrix (when requested), converts
  * to OKLCH, flips lightness for the dark theme, enforces contrast against the
- * theme background, and gamut-maps the result back to sRGB.
+ * theme background, and gamut-maps the result back to sRGB. Source alpha is
+ * kept in every case.
  */
 export function transformColor(
-  hex: string,
+  value: string,
   options: ColorTransformOptions,
-): string {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return hex;
+): string | undefined {
+  const color = parseColor(value);
+  if (!color) return undefined;
 
-  const replacement = resolveColorReplacement(hex, options.role, options.theme);
+  const { rgb, alpha } = color;
+  const replacement = resolveColorReplacement(
+    rgbToHex(rgb),
+    options.role,
+    options.theme,
+  );
 
-  // `null` means keep the original color; a string is used exactly as written.
+  // `null` means keep the original color; a string is used as written, with
+  // the source alpha applied when the string is a color this file can read.
   if (replacement !== undefined) {
-    return replacement ?? hex;
+    return replacement === null ? undefined : withAlpha(replacement, alpha);
   }
 
   // A white fill should become the exact page background, not a near-black
   // approximation of it.
   if (options.role === 'fill' && isWhite(rgb)) {
-    return options.theme.background;
+    return withAlpha(options.theme.background, alpha);
   }
 
   let linear = srgbToLinear(rgb);
@@ -66,12 +82,12 @@ export function transformColor(
     options.backgroundLuminance,
   );
 
-  return rgbToHex(oklchToSrgb(lightness, c, h));
+  return formatColor(oklchToSrgb(lightness, c, h), alpha);
 }
 
-export function luminanceOf(hex: string): number {
-  const rgb = hexToRgb(hex);
-  return rgb ? relativeLuminance(srgbToLinear(rgb)) : 0;
+export function luminanceOf(value: string): number {
+  const color = parseColor(value);
+  return color ? relativeLuminance(srgbToLinear(color.rgb)) : 0;
 }
 
 /**
@@ -88,11 +104,10 @@ function resolveColorReplacement(
   role: ColorRole,
   theme: ThemeDefinition,
 ): ColorReplacement | undefined {
-  const normalized = normalizeHex(hex);
-
-  if (theme.overrides && normalized) {
+  if (theme.overrides) {
     for (const [source, replacement] of Object.entries(theme.overrides)) {
-      if (normalizeHex(source) !== normalized) continue;
+      const sourceColor = parseColor(source);
+      if (!sourceColor || rgbToHex(sourceColor.rgb) !== hex) continue;
 
       if (replacement === null || typeof replacement === 'string') {
         return replacement;
@@ -157,35 +172,142 @@ function enforceContrast(
   return goLighter ? high : low;
 }
 
-function hexToRgb(hex: string): Rgb | undefined {
-  const normalized = normalizeHex(hex);
-  if (!normalized) return undefined;
+/**
+ * Parses hex (3, 4, 6, or 8 digits), `rgb()`/`rgba()`, `hsl()`/`hsla()` in
+ * comma or space syntax, and CSS named colors.
+ */
+function parseColor(value: string): ParsedColor | undefined {
+  const color = value.trim().toLowerCase();
 
-  const value = normalized.slice(1);
+  if (color.startsWith('#')) return parseHex(color.slice(1));
 
-  return [
-    Number.parseInt(value.slice(0, 2), 16) / 255,
-    Number.parseInt(value.slice(2, 4), 16) / 255,
-    Number.parseInt(value.slice(4, 6), 16) / 255,
-  ];
+  const named = NAMED_COLORS[color];
+  if (named) return parseHex(named);
+
+  const fn = /^(rgba?|hsla?)\(([^()]*)\)$/.exec(color);
+  if (!fn) return undefined;
+
+  // Accepts `r, g, b, a` and `r g b / a`.
+  const args = fn[2].split(/\s*[,/]\s*|\s+/).filter(Boolean);
+  if (args.length !== 3 && args.length !== 4) return undefined;
+
+  const alpha = args.length === 4 ? parseAlpha(args[3]) : 1;
+  if (alpha === undefined) return undefined;
+
+  if (fn[1].startsWith('rgb')) {
+    const rgb = args.slice(0, 3).map(parseRgbChannel);
+    return rgb.every((channel) => channel !== undefined)
+      ? { rgb: rgb as unknown as Rgb, alpha }
+      : undefined;
+  }
+
+  const hue = parseHue(args[0]);
+  const saturation = parsePercentage(args[1]);
+  const lightness = parsePercentage(args[2]);
+
+  if (hue === undefined || saturation === undefined || lightness === undefined) {
+    return undefined;
+  }
+
+  return { rgb: hslToRgb(hue, saturation, lightness), alpha };
 }
 
-function normalizeHex(hex: string): string | undefined {
-  const value = hex.replace(/^#/, '').toLowerCase();
-
-  if (!/^(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) {
+function parseHex(digits: string): ParsedColor | undefined {
+  if (!/^(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(digits)) {
     return undefined;
   }
 
   const expanded =
-    value.length === 3
-      ? value
+    digits.length <= 4
+      ? digits
           .split('')
           .map((digit) => digit + digit)
           .join('')
-      : value;
+      : digits;
+  const channel = (index: number) =>
+    Number.parseInt(expanded.slice(index, index + 2), 16) / 255;
 
-  return `#${expanded}`;
+  return {
+    rgb: [channel(0), channel(2), channel(4)],
+    alpha: expanded.length === 8 ? channel(6) : 1,
+  };
+}
+
+function parseNumber(token: string): number | undefined {
+  return /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/.test(token)
+    ? Number(token)
+    : undefined;
+}
+
+/** `50%` or a bare number (CSS Color 4), as 0 to 1. */
+function parsePercentage(token: string): number | undefined {
+  const number = parseNumber(token.replace(/%$/, ''));
+  return number === undefined ? undefined : clamp01(number / 100);
+}
+
+/** `0` to `255`, or a percentage, as 0 to 1. */
+function parseRgbChannel(token: string): number | undefined {
+  if (token.endsWith('%')) return parsePercentage(token);
+
+  const number = parseNumber(token);
+  return number === undefined ? undefined : clamp01(number / 255);
+}
+
+/** `0.5` or `50%`, as 0 to 1. */
+function parseAlpha(token: string): number | undefined {
+  if (token.endsWith('%')) return parsePercentage(token);
+
+  const number = parseNumber(token);
+  return number === undefined ? undefined : clamp01(number);
+}
+
+/** Degrees by default; `deg`, `grad`, `rad`, and `turn` units are accepted. */
+function parseHue(token: string): number | undefined {
+  const match = /^(.*?)(deg|grad|rad|turn)?$/.exec(token);
+  const number = match ? parseNumber(match[1]) : undefined;
+  if (number === undefined) return undefined;
+
+  switch (match?.[2]) {
+    case 'grad':
+      return number * 0.9;
+    case 'rad':
+      return (number * 180) / Math.PI;
+    case 'turn':
+      return number * 360;
+    default:
+      return number;
+  }
+}
+
+function hslToRgb(hue: number, saturation: number, lightness: number): Rgb {
+  const h = (((hue % 360) + 360) % 360) / 30;
+  const a = saturation * Math.min(lightness, 1 - lightness);
+  const channel = (n: number) => {
+    const k = (n + h) % 12;
+    return lightness - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+  };
+
+  return [channel(0), channel(8), channel(4)];
+}
+
+/** `#rrggbb`, or `#rrggbbaa` when the color is translucent. */
+function formatColor(rgb: Rgb, alpha: number): string {
+  if (alpha >= 1) return rgbToHex(rgb);
+
+  return (
+    rgbToHex(rgb) +
+    Math.round(clamp01(alpha) * 255)
+      .toString(16)
+      .padStart(2, '0')
+  );
+}
+
+/** Applies source alpha to a replacement color; unreadable strings pass through. */
+function withAlpha(replacement: string, alpha: number): string {
+  if (alpha >= 1) return replacement;
+
+  const color = parseColor(replacement);
+  return color ? formatColor(color.rgb, color.alpha * alpha) : replacement;
 }
 
 function rgbToHex([r, g, b]: Rgb): string {
