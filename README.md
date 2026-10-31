@@ -83,7 +83,7 @@ npx wrangler secret put B2_APPLICATION_KEY
 npx wrangler secret put B2_BUCKET_NAME
 ```
 
-If the Worker returns `Worker is not configured correctly`, run `npm run secrets` and redeploy; `wrangler tail` logs the missing variable names.
+If the Worker returns `Worker is not configured correctly`, its B2 secrets are missing from the deployed script. Add `B2_ACCOUNT_ID`, `B2_APPLICATION_KEY`, and `B2_BUCKET_NAME` under **Workers & Pages → tintflare → Settings → Variables and Secrets**, then redeploy. `wrangler tail` logs the missing variable names.
 
 ## Scripts
 

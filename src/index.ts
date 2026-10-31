@@ -27,7 +27,7 @@ export default {
       return withServerTiming(response, timing);
     } catch (error) {
       if (error instanceof ConfigurationError) {
-        console.error('Worker configuration error', error);
+        console.error(`Worker configuration error: ${error.message}`);
         timing.add('total', performance.now() - started);
 
         return withServerTiming(
